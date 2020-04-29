@@ -1,12 +1,12 @@
-# tlock
+# TLock
 ![Build](https://github.com/shettyh/tlock/workflows/Go/badge.svg?branch=master)
 
-Golang Lock with Timeout.
+Simple Golang Lock with Timeout.
 
-### Install
+## Install
 - `go get github.com/shettyh/tlock`
 
-### How to use
+## How to use
 
 ```go
 // Create lock
@@ -30,4 +30,6 @@ if tlock.TryLockWithTimeout(time.Seconds * 10 ) {
     ...
 }
 ```
+
+For detailed example please check the examples folder
 
