@@ -1,35 +1,44 @@
 package tlock
 
 import (
+	"sync"
 	"time"
 )
 
-type Lock struct {
-	lock chan struct{}
+type Lock interface {
+	sync.Locker
+	TryLock() bool
+	TryLockWithTimeout(duration time.Duration) bool
 }
 
-func New() *Lock {
-	return &Lock{make(chan struct{}, 1)}
+type lock struct {
+	lockChan chan struct{}
 }
 
-func (lock *Lock) TryLock() bool {
+func New() Lock {
+	// Create the channel with size 1
+	return &lock{make(chan struct{}, 1)}
+}
+
+func (l *lock) TryLock() bool {
 	select {
-	case lock.lock <- struct{}{}:
+	case l.lockChan <- struct{}{}:
 		return true
 	default:
-		// Failed to Acquire lock
+		// Failed to Acquire l
 		return false
 	}
 }
 
-func (lock *Lock) TryLockWithTimeout(timeout time.Duration) bool {
-	if lock.TryLock() {
+func (l *lock) TryLockWithTimeout(timeout time.Duration) bool {
+	// fast path
+	if l.TryLock() {
 		return true
 	}
 
-	// Blocking send with timeout
+	// slow path
 	select {
-	case lock.lock <- struct{}{}:
+	case l.lockChan <- struct{}{}:
 		return true
 	case <-time.After(timeout):
 		// Failed to Acquire lock
@@ -37,14 +46,14 @@ func (lock *Lock) TryLockWithTimeout(timeout time.Duration) bool {
 	}
 }
 
-// Blocking call
-func (lock *Lock) Lock() {
-	lock.lock <- struct{}{}
+// lock is blocking call, waits for other lockChan to be released
+func (l *lock) Lock() {
+	l.lockChan <- struct{}{}
 }
 
-func (lock *Lock) Unlock() {
+func (l *lock) Unlock() {
 	select {
-	case <-lock.lock:
+	case <-l.lockChan:
 		return
 	default:
 		return
