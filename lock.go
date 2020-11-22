@@ -36,13 +36,18 @@ func (l *lock) TryLockWithTimeout(timeout time.Duration) bool {
 		return true
 	}
 
+	endTime := time.Now().Add(timeout)
 	// slow path
-	select {
-	case l.lockChan <- struct{}{}:
-		return true
-	case <-time.After(timeout):
-		// Failed to Acquire lock
-		return false
+	for {
+		select {
+		case l.lockChan <- struct{}{}:
+			return true
+		default:
+			// Failed to Acquire lock, check for timeout
+			if endTime.Sub(time.Now()) <= 0.0 {
+				return false
+			}
+		}
 	}
 }
 
