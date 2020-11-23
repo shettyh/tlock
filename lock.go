@@ -2,6 +2,7 @@ package tlock
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -13,7 +14,7 @@ type Lock interface {
 
 type lock struct {
 	lockChan chan struct{}
-	locked bool
+	locked int32
 }
 
 func New() Lock {
@@ -25,7 +26,7 @@ func New() Lock {
 func (l *lock) TryLock() bool {
 	select {
 	case l.lockChan <- struct{}{}:
-		l.locked = true
+		atomic.StoreInt32(&l.locked, 1)
 		return true
 	default:
 		// Failed to Acquire l
@@ -42,11 +43,11 @@ func (l *lock) TryLockWithTimeout(timeout time.Duration) bool {
 	// slow path
 	select {
 	case l.lockChan <- struct{}{}:
-		l.locked = true
+		atomic.StoreInt32(&l.locked, 1)
 		return true
 	case <-time.After(timeout):
-		if !l.locked && len(l.lockChan) == 1{
-			l.locked = true
+		if atomic.LoadInt32(&l.locked) == 0 && len(l.lockChan) == 1{
+			atomic.StoreInt32(&l.locked, 1)
 			return true
 		}
 		return false
@@ -58,7 +59,7 @@ func (l *lock) TryLockWithTimeout(timeout time.Duration) bool {
 // lock is blocking call, waits for other lockChan to be released
 func (l *lock) Lock() {
 	l.lockChan <- struct{}{}
-	l.locked = true
+	atomic.StoreInt32(&l.locked, 1)
 }
 
 func (l *lock) Unlock() {
@@ -66,6 +67,6 @@ func (l *lock) Unlock() {
 	case <-l.lockChan:
 	default:
 	}
-	l.locked = false
+	atomic.StoreInt32(&l.locked, 0)
 	return
 }
